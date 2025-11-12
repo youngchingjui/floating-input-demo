@@ -18,6 +18,27 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
   const audioChunksRef = useRef<Blob[]>([])
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Local visibility state for the floating status pill so we can animate out
+  const [showStatus, setShowStatus] = useState(false)
+  const [statusClosing, setStatusClosing] = useState(false)
+
+  useEffect(() => {
+    if (isProcessing) {
+      setShowStatus(true)
+      setStatusClosing(false)
+      return
+    }
+    // animate out when processing finishes
+    if (showStatus) {
+      setStatusClosing(true)
+      const t = setTimeout(() => {
+        setShowStatus(false)
+        setStatusClosing(false)
+      }, 220)
+      return () => clearTimeout(t)
+    }
+  }, [isProcessing])
+
   // Reset recording time when stopping
   useEffect(() => {
     if (!isRecording) {
@@ -70,15 +91,19 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
     }
   }
 
-  const handleVoiceSubmit = async () => {
+  const handleVoiceSubmit = () => {
     stopRecording()
-    await onSubmit(`Voice recording (${recordingTime}s)`, true)
+    // Optimistic: fire-and-forget, collapse UI immediately
+    onSubmit(`Voice recording (${recordingTime}s)`, true).catch((e) =>
+      console.error("[v0] Voice submit error:", e),
+    )
     setMode("collapsed")
   }
 
-  const handleTextSubmit = async () => {
+  const handleTextSubmit = () => {
     if (textInput.trim()) {
-      await onSubmit(textInput, false)
+      // Optimistic: fire-and-forget, collapse UI immediately
+      onSubmit(textInput, false).catch((e) => console.error("[v0] Text submit error:", e))
       setTextInput("")
       setMode("collapsed")
     }
@@ -93,6 +118,25 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center p-4 pointer-events-none">
       <div className="w-full max-w-2xl pointer-events-auto slide-up">
+        {/* Floating status pill */}
+        {showStatus && (
+          <div className="mb-2 flex w-full justify-center">
+            <div
+              className={`status-bubble rounded-full border bg-card/95 px-4 py-2 text-sm shadow-lg backdrop-blur-sm flex items-center gap-2 ${statusClosing ? "status-bubble-out" : "status-bubble-in"}`}
+            >
+              <svg className="h-4 w-4 animate-spin text-muted-foreground" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path
+                  className="opacity-70"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              <span className="text-muted-foreground">Working in background…</span>
+            </div>
+          </div>
+        )}
+
         {/* Collapsed State */}
         {mode === "collapsed" && (
           <div className="mx-auto flex w-fit items-center gap-3 rounded-full border bg-card/95 p-2 shadow-lg backdrop-blur-sm">
@@ -156,27 +200,8 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
                 >
                   Cancel
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={handleTextSubmit}
-                  disabled={!textInput.trim() || isProcessing}
-                  className="min-w-20"
-                >
-                  {isProcessing ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        />
-                      </svg>
-                      Processing
-                    </span>
-                  ) : (
-                    "Submit"
-                  )}
+                <Button size="sm" onClick={handleTextSubmit} disabled={!textInput.trim() || isProcessing} className="min-w-20">
+                  Submit
                 </Button>
               </div>
             </div>
@@ -226,28 +251,7 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
                       Cancel
                     </Button>
                     <Button size="sm" onClick={handleVoiceSubmit} disabled={isProcessing} className="min-w-20">
-                      {isProcessing ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            />
-                          </svg>
-                          Processing
-                        </span>
-                      ) : (
-                        "Submit"
-                      )}
+                      Submit
                     </Button>
                   </div>
                 </>
@@ -259,3 +263,4 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
     </div>
   )
 }
+
