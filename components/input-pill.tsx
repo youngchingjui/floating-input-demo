@@ -7,9 +7,10 @@ import { Textarea } from "@/components/ui/textarea"
 interface InputPillProps {
   onSubmit: (input: string, isVoice: boolean) => Promise<void>
   isProcessing: boolean
+  onSeeAllPreviews?: () => void
 }
 
-export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
+export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: InputPillProps) {
   const [mode, setMode] = useState<"collapsed" | "text" | "voice">("collapsed")
   const [textInput, setTextInput] = useState("")
   const [isRecording, setIsRecording] = useState(false)
@@ -17,6 +18,10 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Dropdown state
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const splitRef = useRef<HTMLDivElement | null>(null)
 
   // Local visibility state for the floating status pill so we can animate out
   const [showStatus, setShowStatus] = useState(false)
@@ -45,6 +50,25 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
       setRecordingTime(0)
     }
   }, [isRecording])
+
+  // Close dropdown on outside click or on escape
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!isMenuOpen) return
+      if (splitRef.current && !splitRef.current.contains(e.target as Node)) {
+        setIsMenuOpen(false)
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setIsMenuOpen(false)
+    }
+    document.addEventListener("mousedown", onDocClick)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onDocClick)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [isMenuOpen])
 
   const startRecording = async () => {
     try {
@@ -116,11 +140,11 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center p-4 pointer-events-none">
+    <div className="fixed bottom-0 right-0 z-50 flex justify-end p-4 pointer-events-none">
       <div className="w-full max-w-2xl pointer-events-auto slide-up">
         {/* Floating status pill */}
         {showStatus && (
-          <div className="mb-2 flex w-full justify-center">
+          <div className="mb-2 flex w-full justify-end">
             <div
               className={`status-bubble rounded-full border bg-card/95 px-4 py-2 text-sm shadow-lg backdrop-blur-sm flex items-center gap-2 ${statusClosing ? "status-bubble-out" : "status-bubble-in"}`}
             >
@@ -137,48 +161,89 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
           </div>
         )}
 
-        {/* Collapsed State */}
+        {/* Collapsed State - split button bottom-right */}
         {mode === "collapsed" && (
-          <div className="mx-auto flex w-fit items-center gap-3 rounded-full border bg-card/95 p-2 shadow-lg backdrop-blur-sm">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-12 w-12 rounded-full hover:bg-accent"
-              onClick={() => setMode("voice")}
-              disabled={isProcessing}
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                />
-              </svg>
-            </Button>
-            <div className="h-8 w-px bg-border" />
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-12 w-12 rounded-full hover:bg-accent"
-              onClick={() => setMode("text")}
-              disabled={isProcessing}
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
-            </Button>
+          <div ref={splitRef} className="ml-auto relative">
+            <div className="flex items-center gap-px rounded-full border bg-card/95 p-1 shadow-lg backdrop-blur-sm">
+              <Button
+                size="icon-lg"
+                variant="ghost"
+                className="rounded-l-full hover:bg-accent"
+                onClick={() => setMode("voice")}
+                disabled={isProcessing}
+                aria-label="Start voice input"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                  />
+                </svg>
+              </Button>
+              <div className="h-6 w-px bg-border" />
+              <Button
+                size="icon-lg"
+                variant="ghost"
+                className={`rounded-r-full hover:bg-accent transition-transform ${isMenuOpen ? "rotate-180" : ""}`}
+                onClick={() => setIsMenuOpen((v) => !v)}
+                disabled={isProcessing}
+                aria-label="More input options"
+                aria-expanded={isMenuOpen}
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </Button>
+            </div>
+
+            {isMenuOpen && (
+              <div className="absolute bottom-full right-0 mb-2 w-56 rounded-xl border bg-card/95 p-1.5 shadow-xl backdrop-blur-sm">
+                <button
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    setMode("text")
+                  }}
+                  disabled={isProcessing}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                  Text input
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    if (onSeeAllPreviews) onSeeAllPreviews()
+                    else console.log("[v0] See all previews clicked")
+                  }}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                    />
+                  </svg>
+                  See all previews
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {/* Text Input Mode */}
         {mode === "text" && (
-          <div className="rounded-2xl border bg-card/95 p-4 shadow-xl backdrop-blur-sm">
+          <div className="ml-auto max-w-md rounded-2xl border bg-card/95 p-4 shadow-xl backdrop-blur-sm">
             <div className="space-y-3">
               <Textarea
                 placeholder="Type your message..."
@@ -210,7 +275,7 @@ export default function InputPill({ onSubmit, isProcessing }: InputPillProps) {
 
         {/* Voice Recording Mode */}
         {mode === "voice" && (
-          <div className="rounded-2xl border bg-card/95 p-6 shadow-xl backdrop-blur-sm">
+          <div className="ml-auto max-w-md rounded-2xl border bg-card/95 p-6 shadow-xl backdrop-blur-sm">
             <div className="flex flex-col items-center gap-4">
               {!isRecording ? (
                 <>
