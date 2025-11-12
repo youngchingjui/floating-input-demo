@@ -14,6 +14,8 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
   const [mode, setMode] = useState<"collapsed" | "text" | "voice">("collapsed")
   const [textInput, setTextInput] = useState("")
   const [isRecording, setIsRecording] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
+  const [hasRecording, setHasRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -44,12 +46,12 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
     }
   }, [isProcessing])
 
-  // Reset recording time when stopping
+  // Reset recording time when there is no active or saved recording
   useEffect(() => {
-    if (!isRecording) {
+    if (!isRecording && !hasRecording) {
       setRecordingTime(0)
     }
-  }, [isRecording])
+  }, [isRecording, hasRecording])
 
   // Close dropdown on outside click or on escape
   useEffect(() => {
@@ -70,8 +72,23 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
     }
   }, [isMenuOpen])
 
+  const startTimer = () => {
+    if (recordingIntervalRef.current) return
+    recordingIntervalRef.current = setInterval(() => {
+      setRecordingTime((prev) => prev + 1)
+    }, 1000)
+  }
+
+  const stopTimer = () => {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current)
+      recordingIntervalRef.current = null
+    }
+  }
+
   const startRecording = async () => {
     try {
+      setHasRecording(false)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mediaRecorder = new MediaRecorder(stream)
       mediaRecorderRef.current = mediaRecorder
@@ -84,16 +101,15 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
         console.log("[v0] Recording completed:", audioBlob.size, "bytes")
+        setHasRecording(true)
         stream.getTracks().forEach((track) => track.stop())
       }
 
       mediaRecorder.start()
       setIsRecording(true)
-
+      setIsPaused(false)
       // Start timer
-      recordingIntervalRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1)
-      }, 1000)
+      startTimer()
 
       console.log("[v0] Recording started")
     } catch (error) {
@@ -102,25 +118,67 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
     }
   }
 
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current && isRecording && !isPaused) {
+      try {
+        mediaRecorderRef.current.pause()
+        setIsPaused(true)
+        stopTimer()
+        console.log("[v0] Recording paused")
+      } catch (e) {
+        console.error("[v0] Unable to pause recording:", e)
+      }
+    }
+  }
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current && isRecording && isPaused) {
+      try {
+        mediaRecorderRef.current.resume()
+        setIsPaused(false)
+        startTimer()
+        console.log("[v0] Recording resumed")
+      } catch (e) {
+        console.error("[v0] Unable to resume recording:", e)
+      }
+    }
+  }
+
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
-
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current)
+      try {
+        mediaRecorderRef.current.stop()
+      } catch (e) {
+        console.error("[v0] Unable to stop recording:", e)
       }
-
+      setIsRecording(false)
+      setIsPaused(false)
+      stopTimer()
       console.log("[v0] Recording stopped")
     }
   }
 
+  const discardRecording = () => {
+    // Discard any recorded audio and reset state
+    audioChunksRef.current = []
+    setHasRecording(false)
+    setIsRecording(false)
+    setIsPaused(false)
+    stopTimer()
+    setRecordingTime(0)
+  }
+
   const handleVoiceSubmit = () => {
-    stopRecording()
+    // Ensure we don't keep recording in the background
+    if (isRecording) stopRecording()
+
     // Optimistic: fire-and-forget, collapse UI immediately
     onSubmit(`Voice recording (${recordingTime}s)`, true).catch((e) =>
       console.error("[v0] Voice submit error:", e),
     )
+
+    // Reset voice UI state
+    discardRecording()
     setMode("collapsed")
   }
 
@@ -137,6 +195,12 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, "0")}`
+  }
+
+  const handleMicTap = () => {
+    setMode("voice")
+    // Immediately request mic access and begin recording on first tap
+    startRecording()
   }
 
   return (
@@ -169,7 +233,7 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                 size="icon-lg"
                 variant="ghost"
                 className="rounded-l-full hover:bg-accent"
-                onClick={() => setMode("voice")}
+                onClick={handleMicTap}
                 disabled={isProcessing}
                 aria-label="Start voice input"
               >
@@ -289,31 +353,51 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                       />
                     </svg>
                   </Button>
-                  <p className="text-sm text-muted-foreground">Tap to start recording</p>
-                  <Button variant="ghost" size="sm" onClick={() => setMode("collapsed")} disabled={isProcessing}>
-                    Cancel
-                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    {hasRecording ? `Recording ready: ${formatTime(recordingTime)}` : "Tap to start recording"}
+                  </p>
+                  <div className="flex gap-2">
+                    {!hasRecording ? (
+                      <Button variant="ghost" size="sm" onClick={() => setMode("collapsed")} disabled={isProcessing}>
+                        Cancel
+                      </Button>
+                    ) : (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={discardRecording} disabled={isProcessing}>
+                          Discard
+                        </Button>
+                        <Button size="sm" onClick={handleVoiceSubmit} disabled={isProcessing} className="min-w-20">
+                          Submit
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </>
               ) : (
                 <>
-                  <div className="recording-pulse flex h-20 w-20 items-center justify-center rounded-full bg-destructive">
-                    <div className="h-4 w-4 rounded-full bg-destructive-foreground" />
+                  <div className={`recording-pulse flex h-20 w-20 items-center justify-center rounded-full ${isPaused ? "bg-muted" : "bg-destructive"}`}>
+                    <div className={`h-4 w-4 rounded-full ${isPaused ? "bg-muted-foreground" : "bg-destructive-foreground"}`} />
                   </div>
                   <div className="space-y-1 text-center">
                     <p className="text-2xl font-bold font-mono tabular-nums">{formatTime(recordingTime)}</p>
-                    <p className="text-sm text-muted-foreground">Recording...</p>
+                    <p className="text-sm text-muted-foreground">{isPaused ? "Paused" : "Recording..."}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2 justify-center">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        stopRecording()
-                        setMode("collapsed")
-                      }}
+                      onClick={isPaused ? resumeRecording : pauseRecording}
                       disabled={isProcessing}
                     >
-                      Cancel
+                      {isPaused ? "Resume" : "Pause"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={stopRecording}
+                      disabled={isProcessing}
+                    >
+                      Stop
                     </Button>
                     <Button size="sm" onClick={handleVoiceSubmit} disabled={isProcessing} className="min-w-20">
                       Submit
