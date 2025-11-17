@@ -29,22 +29,93 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
   const [showStatus, setShowStatus] = useState(false)
   const [statusClosing, setStatusClosing] = useState(false)
 
+  // Status ticker state
+  const STATUS_POOL = useRef<string[]>([
+    "Transcribing audio…",
+    "Analyzing input…",
+    "Generating plan…",
+    "Drafting response…",
+    "Refining output…",
+    "Applying theme…",
+    "Optimizing assets…",
+    "Finalizing changes…",
+  ])
+  const [statusMessage, setStatusMessage] = useState<string>("Working in background…")
+  const [prevStatusMessage, setPrevStatusMessage] = useState<string | null>(null)
+  const statusTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>([])
+
   useEffect(() => {
     if (isProcessing) {
       setShowStatus(true)
       setStatusClosing(false)
+
+      // reset status and schedule a few random updates (1-3) within ~5s
+      setStatusMessage("Working in background…")
+      setPrevStatusMessage(null)
+
+      // clear any pending timeouts
+      statusTimeoutsRef.current.forEach(clearTimeout)
+      statusTimeoutsRef.current = []
+
+      const updatesCount = 1 + Math.floor(Math.random() * 3) // 1-3
+      const times: number[] = []
+      for (let i = 0; i < updatesCount; i++) {
+        // random time between 500ms and 5000ms
+        times.push(500 + Math.floor(Math.random() * 4500))
+      }
+      times.sort((a, b) => a - b)
+
+      times.forEach((ms) => {
+        const t = setTimeout(() => {
+          setPrevStatusMessage((prev) => {
+            // use the latest statusMessage for outgoing
+            const outgoing = statusMessageRef.current
+            // pick a new message different from outgoing
+            const pool = STATUS_POOL.current
+            let next = outgoing
+            if (pool.length > 0) {
+              for (let tries = 0; tries < 4; tries++) {
+                const candidate = pool[Math.floor(Math.random() * pool.length)]
+                if (candidate !== outgoing) {
+                  next = candidate
+                  break
+                }
+              }
+            }
+            // trigger animation by setting prev and then current
+            setStatusMessage(next)
+            // after animation duration, clear prev
+            const clearT = setTimeout(() => setPrevStatusMessage(null), 220)
+            statusTimeoutsRef.current.push(clearT)
+            return outgoing
+          })
+        }, ms)
+        statusTimeoutsRef.current.push(t)
+      })
+
       return
     }
+
     // animate out when processing finishes
     if (showStatus) {
       setStatusClosing(true)
+      // clear any pending timeouts to avoid stray updates after close
+      statusTimeoutsRef.current.forEach(clearTimeout)
+      statusTimeoutsRef.current = []
       const t = setTimeout(() => {
         setShowStatus(false)
         setStatusClosing(false)
+        setPrevStatusMessage(null)
       }, 220)
       return () => clearTimeout(t)
     }
   }, [isProcessing])
+
+  // Keep a ref of the latest statusMessage for timeout callbacks
+  const statusMessageRef = useRef(statusMessage)
+  useEffect(() => {
+    statusMessageRef.current = statusMessage
+  }, [statusMessage])
 
   // Reset recording time when there is no active or saved recording
   useEffect(() => {
@@ -220,7 +291,15 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                 />
               </svg>
-              <span className="text-muted-foreground">Working in background…</span>
+              {/* Ticker container - keep pill height fixed */}
+              <div className="relative h-5 overflow-hidden text-muted-foreground">
+                {prevStatusMessage && (
+                  <div className="absolute inset-0 ticker-out flex items-center">{prevStatusMessage}</div>
+                )}
+                <div className={`absolute inset-0 ${prevStatusMessage ? "ticker-in" : ""} flex items-center`}>
+                  {statusMessage}
+                </div>
+              </div>
             </div>
           </div>
         )}

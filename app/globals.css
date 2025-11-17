@@ -193,3 +193,34 @@
   animation: bubble-out 0.2s ease-in forwards;
 }
 
+/* Status ticker animations */
+@keyframes ticker-in-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0%);
+    opacity: 1;
+  }
+}
+
+@keyframes ticker-out-up {
+  from {
+    transform: translateY(0%);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0.6;
+  }
+}
+
+.ticker-in {
+  animation: ticker-in-up 0.22s ease-out forwards;
+}
+
+.ticker-out {
+  animation: ticker-out-up 0.22s ease-in forwards;
+}
+
