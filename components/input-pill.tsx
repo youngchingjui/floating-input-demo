@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { StatusTicker } from "@/components/status-ticker"
 
 interface PillJob {
   id: string
@@ -215,7 +216,9 @@ export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPr
                           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                         />
                       </svg>
-                      <span className="text-muted-foreground">{job.label ?? "Working in background…"}</span>
+                      <span className="text-muted-foreground">
+                        <StatusTicker message={job.label ?? "Working in background…"} />
+                      </span>
                     </>
                   ) : (
                     <>
