@@ -236,8 +236,8 @@ export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPr
 
         {/* Collapsed State - split button bottom-right */}
         {mode === "collapsed" && (
-          <div ref={splitRef} className="ml-auto relative">
-            <div className="flex items-center gap-px rounded-full border bg-card/95 p-1 shadow-lg backdrop-blur-sm">
+          <div ref={splitRef} className="relative w-full flex justify-end">
+            <div className="inline-flex items-center gap-px rounded-full border bg-card/95 p-1 shadow-lg backdrop-blur-sm">
               <Button
                 size="icon-lg"
                 variant="ghost"
