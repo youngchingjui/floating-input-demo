@@ -4,13 +4,20 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 
+interface PillJob {
+  id: string
+  status: "processing" | "ready"
+  label?: string
+}
+
 interface InputPillProps {
   onSubmit: (input: string, isVoice: boolean) => Promise<void>
-  isProcessing: boolean
+  jobs?: PillJob[]
+  onRevealJob?: (id: string) => void
   onSeeAllPreviews?: () => void
 }
 
-export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: InputPillProps) {
+export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPreviews }: InputPillProps) {
   const [mode, setMode] = useState<"collapsed" | "text" | "voice">("collapsed")
   const [textInput, setTextInput] = useState("")
   const [isRecording, setIsRecording] = useState(false)
@@ -24,27 +31,6 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
   // Dropdown state
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const splitRef = useRef<HTMLDivElement | null>(null)
-
-  // Local visibility state for the floating status pill so we can animate out
-  const [showStatus, setShowStatus] = useState(false)
-  const [statusClosing, setStatusClosing] = useState(false)
-
-  useEffect(() => {
-    if (isProcessing) {
-      setShowStatus(true)
-      setStatusClosing(false)
-      return
-    }
-    // animate out when processing finishes
-    if (showStatus) {
-      setStatusClosing(true)
-      const t = setTimeout(() => {
-        setShowStatus(false)
-        setStatusClosing(false)
-      }, 220)
-      return () => clearTimeout(t)
-    }
-  }, [isProcessing])
 
   // Reset recording time when there is no active or saved recording
   useEffect(() => {
@@ -203,24 +189,47 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
     startRecording()
   }
 
+  // Render a stack of status pills (processing and ready)
+  const hasJobs = jobs && jobs.length > 0
+  const jobsInRenderOrder = [...jobs] // newest last so it appears closest to the split button
+
   return (
     <div className="fixed bottom-0 right-0 z-50 flex justify-end p-4 pointer-events-none">
       <div className="w-full max-w-2xl pointer-events-auto slide-up">
-        {/* Floating status pill */}
-        {showStatus && (
+        {/* Floating status pills */}
+        {hasJobs && (
           <div className="mb-2 flex w-full justify-end">
-            <div
-              className={`status-bubble rounded-full border bg-card/95 px-4 py-2 text-sm shadow-lg backdrop-blur-sm flex items-center gap-2 ${statusClosing ? "status-bubble-out" : "status-bubble-in"}`}
-            >
-              <svg className="h-4 w-4 animate-spin text-muted-foreground" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path
-                  className="opacity-70"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-              <span className="text-muted-foreground">Working in background…</span>
+            <div className="flex flex-col items-end gap-2">
+              {jobsInRenderOrder.map((job) => (
+                <div
+                  key={job.id}
+                  className={`status-bubble rounded-full border bg-card/95 px-3 py-2 text-sm shadow-lg backdrop-blur-sm flex items-center gap-2`}
+                >
+                  {job.status === "processing" ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin text-muted-foreground" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path
+                          className="opacity-70"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                      <span className="text-muted-foreground">{job.label ?? "Working in background…"}</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-muted-foreground">{job.label ?? "Change ready"}</span>
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onRevealJob?.(job.id)}>
+                        Show
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -234,7 +243,6 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                 variant="ghost"
                 className="rounded-l-full hover:bg-accent"
                 onClick={handleMicTap}
-                disabled={isProcessing}
                 aria-label="Start voice input"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -252,7 +260,6 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                 variant="ghost"
                 className={`rounded-r-full hover:bg-accent transition-transform ${isMenuOpen ? "rotate-180" : ""}`}
                 onClick={() => setIsMenuOpen((v) => !v)}
-                disabled={isProcessing}
                 aria-label="More input options"
                 aria-expanded={isMenuOpen}
               >
@@ -270,7 +277,6 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                     setIsMenuOpen(false)
                     setMode("text")
                   }}
-                  disabled={isProcessing}
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -314,7 +320,6 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
                 className="min-h-24 resize-none border-0 bg-transparent text-base focus-visible:ring-0"
-                disabled={isProcessing}
                 autoFocus
               />
               <div className="flex items-center justify-end gap-2">
@@ -325,11 +330,10 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                     setMode("collapsed")
                     setTextInput("")
                   }}
-                  disabled={isProcessing}
                 >
                   Cancel
                 </Button>
-                <Button size="sm" onClick={handleTextSubmit} disabled={!textInput.trim() || isProcessing} className="min-w-20">
+                <Button size="sm" onClick={handleTextSubmit} disabled={!textInput.trim()} className="min-w-20">
                   Submit
                 </Button>
               </div>
@@ -343,7 +347,7 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
             <div className="flex flex-col items-center gap-4">
               {!isRecording ? (
                 <>
-                  <Button size="lg" className="h-20 w-20 rounded-full" onClick={startRecording} disabled={isProcessing}>
+                  <Button size="lg" className="h-20 w-20 rounded-full" onClick={startRecording}>
                     <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
@@ -358,15 +362,15 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                   </p>
                   <div className="flex gap-2">
                     {!hasRecording ? (
-                      <Button variant="ghost" size="sm" onClick={() => setMode("collapsed")} disabled={isProcessing}>
+                      <Button variant="ghost" size="sm" onClick={() => setMode("collapsed")}>
                         Cancel
                       </Button>
                     ) : (
                       <>
-                        <Button variant="ghost" size="sm" onClick={discardRecording} disabled={isProcessing}>
+                        <Button variant="ghost" size="sm" onClick={discardRecording}>
                           Discard
                         </Button>
-                        <Button size="sm" onClick={handleVoiceSubmit} disabled={isProcessing} className="min-w-20">
+                        <Button size="sm" onClick={handleVoiceSubmit} className="min-w-20">
                           Submit
                         </Button>
                       </>
@@ -387,7 +391,6 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                       variant="ghost"
                       size="sm"
                       onClick={isPaused ? resumeRecording : pauseRecording}
-                      disabled={isProcessing}
                     >
                       {isPaused ? "Resume" : "Pause"}
                     </Button>
@@ -395,11 +398,10 @@ export default function InputPill({ onSubmit, isProcessing, onSeeAllPreviews }: 
                       variant="outline"
                       size="sm"
                       onClick={stopRecording}
-                      disabled={isProcessing}
                     >
                       Stop
                     </Button>
-                    <Button size="sm" onClick={handleVoiceSubmit} disabled={isProcessing} className="min-w-20">
+                    <Button size="sm" onClick={handleVoiceSubmit} className="min-w-20">
                       Submit
                     </Button>
                   </div>

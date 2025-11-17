@@ -1,21 +1,29 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import InputPill from "@/components/input-pill"
 
+type Theme = {
+  primary: string
+  accent: string
+  bg: string
+}
+
+type Job = {
+  id: string
+  input: string
+  isVoice: boolean
+  status: "processing" | "ready"
+  theme?: Theme
+}
+
 export default function HomePage() {
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [jobs, setJobs] = useState<Job[]>([])
 
-  const handleSubmit = async (input: string, isVoice: boolean) => {
-    setIsProcessing(true)
+  const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-    console.log("[v0] Processing input:", { input, isVoice })
-
-    // Simulate workflow with 3 second delay
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-
-    // Generate random theme colors
-    const themes = [
+  const themes: Theme[] = useMemo(
+    () => [
       {
         primary: "oklch(0.55 0.22 340)", // Pink
         accent: "oklch(0.65 0.25 350)",
@@ -41,19 +49,54 @@ export default function HomePage() {
         accent: "oklch(0.52 0.20 280)",
         bg: "oklch(0.98 0.01 264)",
       },
-    ]
+    ],
+    [],
+  )
 
-    const randomTheme = themes[Math.floor(Math.random() * themes.length)]
-
-    // Update CSS variables for smooth theme transition
-    document.documentElement.style.setProperty("--primary", randomTheme.primary)
-    document.documentElement.style.setProperty("--accent", randomTheme.accent)
-    document.documentElement.style.setProperty("--background", randomTheme.bg)
-
-    console.log("[v0] Theme updated to:", randomTheme)
-
-    setIsProcessing(false)
+  const simulateProcessing = async (): Promise<Theme> => {
+    // Simulate workflow with 3 second delay
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    // Pick a random theme result
+    return themes[Math.floor(Math.random() * themes.length)]
   }
+
+  const applyTheme = (t: Theme) => {
+    document.documentElement.style.setProperty("--primary", t.primary)
+    document.documentElement.style.setProperty("--accent", t.accent)
+    document.documentElement.style.setProperty("--background", t.bg)
+    console.log("[v0] Theme applied:", t)
+  }
+
+  const handleSubmit = async (input: string, isVoice: boolean) => {
+    const id = createId()
+    // Add a processing job
+    setJobs((prev) => [...prev, { id, input, isVoice, status: "processing" }])
+
+    console.log("[v0] Processing input:", { id, input, isVoice })
+
+    try {
+      const theme = await simulateProcessing()
+      // Mark job ready with its theme result
+      setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, status: "ready", theme } : j)))
+      console.log("[v0] Job ready:", id)
+    } catch (e) {
+      console.error("[v0] Processing failed for job:", id, e)
+      // Remove failed job
+      setJobs((prev) => prev.filter((j) => j.id !== id))
+    }
+  }
+
+  const handleRevealJob = useCallback((id: string) => {
+    setJobs((prev) => {
+      const job = prev.find((j) => j.id === id)
+      if (job?.theme) {
+        applyTheme(job.theme)
+      }
+      return prev.filter((j) => j.id !== id)
+    })
+  }, [])
+
+  const pillJobs = jobs.map((j) => ({ id: j.id, status: j.status, label: j.status === "processing" ? "Working in background…" : `Change ready${j.isVoice ? " (voice)" : " (text)"}` }))
 
   return (
     <main className="min-h-screen pb-32">
@@ -142,7 +185,12 @@ export default function HomePage() {
       </section>
 
       {/* Floating Input Pill */}
-      <InputPill onSubmit={handleSubmit} isProcessing={isProcessing} />
+      <InputPill
+        onSubmit={handleSubmit}
+        jobs={pillJobs}
+        onRevealJob={handleRevealJob}
+      />
     </main>
   )
 }
+
