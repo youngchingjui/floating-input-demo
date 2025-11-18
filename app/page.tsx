@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import InputPill from "@/components/input-pill"
 
 type Theme = {
@@ -15,10 +15,13 @@ type Job = {
   isVoice: boolean
   status: "processing" | "ready"
   theme?: Theme
+  // Latest status message for ticker while processing
+  statusMessage?: string
 }
 
 export default function HomePage() {
   const [jobs, setJobs] = useState<Job[]>([])
+  const timeoutsRef = useRef<Record<string, number[]>>({})
 
   const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
@@ -53,9 +56,25 @@ export default function HomePage() {
     [],
   )
 
+  const statusPool = useMemo(
+    () => [
+      "Queued runner",
+      "Allocating resources",
+      "Checking out repo",
+      "Installing dependencies",
+      "Running lint checks",
+      "Compiling",
+      "Running unit steps",
+      "Uploading artifacts",
+      "Almost done",
+    ],
+    [],
+  )
+
   const simulateProcessing = async (): Promise<Theme> => {
-    // Simulate workflow with 3 second delay
-    await new Promise((resolve) => setTimeout(resolve, 3000))
+    // Simulate workflow with 3.5-5s delay
+    const delay = 3500 + Math.floor(Math.random() * 1500)
+    await new Promise((resolve) => setTimeout(resolve, delay))
     // Pick a random theme result
     return themes[Math.floor(Math.random() * themes.length)]
   }
@@ -67,20 +86,54 @@ export default function HomePage() {
     console.log("[v0] Theme applied:", t)
   }
 
+  // Mock a simple status update stream (SSE placeholder)
+  const startStatusStream = (id: string) => {
+    // Between 1 and 3 updates within ~5s
+    const count = 1 + Math.floor(Math.random() * 3)
+    const timeouts: number[] = []
+
+    for (let i = 0; i < count; i++) {
+      const when = 500 + Math.floor(Math.random() * 4200) // 0.5s..4.7s
+      const to = window.setTimeout(() => {
+        const message = statusPool[Math.floor(Math.random() * statusPool.length)]
+        setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, statusMessage: message } : j)))
+      }, when)
+      timeouts.push(to)
+    }
+
+    timeoutsRef.current[id] = timeouts
+  }
+
+  const clearStatusStream = (id: string) => {
+    const timeouts = timeoutsRef.current[id]
+    if (timeouts) {
+      timeouts.forEach((t) => window.clearTimeout(t))
+      delete timeoutsRef.current[id]
+    }
+  }
+
   const handleSubmit = async (input: string, isVoice: boolean) => {
     const id = createId()
-    // Add a processing job
-    setJobs((prev) => [...prev, { id, input, isVoice, status: "processing" }])
+    // Add a processing job with initial message
+    setJobs((prev) => [
+      ...prev,
+      { id, input, isVoice, status: "processing", statusMessage: "Starting workflow" },
+    ])
+
+    // Kick off status update stream
+    startStatusStream(id)
 
     console.log("[v0] Processing input:", { id, input, isVoice })
 
     try {
       const theme = await simulateProcessing()
+      clearStatusStream(id)
       // Mark job ready with its theme result
       setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, status: "ready", theme } : j)))
       console.log("[v0] Job ready:", id)
     } catch (e) {
       console.error("[v0] Processing failed for job:", id, e)
+      clearStatusStream(id)
       // Remove failed job
       setJobs((prev) => prev.filter((j) => j.id !== id))
     }
@@ -96,7 +149,11 @@ export default function HomePage() {
     })
   }, [])
 
-  const pillJobs = jobs.map((j) => ({ id: j.id, status: j.status, label: j.status === "processing" ? "Working in background…" : `Change ready${j.isVoice ? " (voice)" : " (text)"}` }))
+  const pillJobs = jobs.map((j) => ({
+    id: j.id,
+    status: j.status,
+    label: j.status === "processing" ? j.statusMessage ?? "Working in background…" : `Change ready${j.isVoice ? " (voice)" : " (text)"}`,
+  }))
 
   return (
     <main className="min-h-screen pb-32">
