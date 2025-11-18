@@ -43,10 +43,16 @@ export function StatusTicker({ message, duration = 250 }: StatusTickerProps) {
     }
   }, [message, current, duration])
 
+  // Choose the widest content to ensure the container reserves width
+  const measureText = incoming && incoming.length > current.length ? incoming : current
+
   // Fix the line height to ensure consistent height; tailwind text-sm => 1.25rem
-  // We keep width auto so the pill can grow/shrink with content, but only one line is visible.
+  // We keep width based on content by using an invisible measuring span in flow.
   return (
     <span className="relative inline-block h-5 overflow-hidden align-middle">
+      {/* Measuring span to reserve width (not visually shown) */}
+      <span className="invisible block">{measureText}</span>
+
       {/* Previous/current visible message */}
       <span
         className="absolute inset-0 flex items-center will-change-transform"
