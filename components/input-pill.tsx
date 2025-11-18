@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { StatusTicker } from "@/components/status-ticker"
+import { TranscriptionMock } from "@/components/transcription-mock"
 
 interface PillJob {
   id: string
@@ -382,6 +383,9 @@ export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPr
                 </>
               ) : (
                 <>
+                  {/* Animated mock transcription - one line, last word highlighted */}
+                  <TranscriptionMock active={isRecording} paused={isPaused} />
+
                   <div className={`recording-pulse flex h-20 w-20 items-center justify-center rounded-full ${isPaused ? "bg-muted" : "bg-destructive"}`}>
                     <div className={`h-4 w-4 rounded-full ${isPaused ? "bg-muted-foreground" : "bg-destructive-foreground"}`} />
                   </div>
