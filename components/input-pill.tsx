@@ -25,6 +25,7 @@ export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPr
   const [isPaused, setIsPaused] = useState(false)
   const [hasRecording, setHasRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
+  const [isStarting, setIsStarting] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -76,6 +77,7 @@ export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPr
   const startRecording = async () => {
     try {
       setHasRecording(false)
+      setIsStarting(true)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mediaRecorder = new MediaRecorder(stream)
       mediaRecorderRef.current = mediaRecorder
@@ -97,11 +99,13 @@ export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPr
       setIsPaused(false)
       // Start timer
       startTimer()
+      setIsStarting(false)
 
       console.log("[v0] Recording started")
     } catch (error) {
       console.error("[v0] Error accessing microphone:", error)
       alert("Could not access microphone. Please grant permission and try again.")
+      setIsStarting(false)
     }
   }
 
@@ -348,52 +352,34 @@ export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPr
         {mode === "voice" && (
           <div className="ml-auto max-w-md rounded-2xl border bg-card/95 p-6 shadow-xl backdrop-blur-sm">
             <div className="flex flex-col items-center gap-4">
-              {!isRecording ? (
-                <>
-                  <Button size="lg" className="h-20 w-20 rounded-full" onClick={startRecording}>
-                    <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                      />
-                    </svg>
-                  </Button>
-                  <p className="text-sm text-muted-foreground">
-                    {hasRecording ? `Recording ready: ${formatTime(recordingTime)}` : "Tap to start recording"}
-                  </p>
-                  <div className="flex gap-2">
-                    {!hasRecording ? (
-                      <Button variant="ghost" size="sm" onClick={() => setMode("collapsed")}>
-                        Cancel
-                      </Button>
-                    ) : (
-                      <>
-                        <Button variant="ghost" size="sm" onClick={discardRecording}>
-                          Discard
-                        </Button>
-                        <Button size="sm" onClick={handleVoiceSubmit} className="min-w-20">
-                          Submit
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className={`recording-pulse flex h-20 w-20 items-center justify-center rounded-full ${isPaused ? "bg-muted" : "bg-destructive"}`}>
-                    <div className={`h-4 w-4 rounded-full ${isPaused ? "bg-muted-foreground" : "bg-destructive-foreground"}`} />
-                  </div>
-                  <div className="space-y-1 text-center">
-                    <p className="text-2xl font-bold font-mono tabular-nums">{formatTime(recordingTime)}</p>
-                    <p className="text-sm text-muted-foreground">{isPaused ? "Paused" : "Recording..."}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 justify-center">
+              <div className={`recording-pulse flex h-20 w-20 items-center justify-center rounded-full ${
+                isRecording && !isPaused ? "bg-destructive" : "bg-muted"
+              }`}>
+                <div className={`h-4 w-4 rounded-full ${isRecording && !isPaused ? "bg-destructive-foreground" : "bg-muted-foreground"}`} />
+              </div>
+              <div className="space-y-1 text-center">
+                <p className="text-2xl font-bold font-mono tabular-nums">{formatTime(recordingTime)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {isStarting ? "Starting…" : isPaused ? "Paused" : isRecording ? "Recording..." : hasRecording ? `Recording ready: ${formatTime(recordingTime)}` : ""}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {hasRecording && !isRecording ? (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={discardRecording}>
+                      Discard
+                    </Button>
+                    <Button size="sm" onClick={handleVoiceSubmit} className="min-w-20">
+                      Submit
+                    </Button>
+                  </>
+                ) : (
+                  <>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={isPaused ? resumeRecording : pauseRecording}
+                      disabled={isStarting || (!isRecording && !isPaused)}
                     >
                       {isPaused ? "Resume" : "Pause"}
                     </Button>
@@ -401,15 +387,28 @@ export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPr
                       variant="outline"
                       size="sm"
                       onClick={stopRecording}
+                      disabled={isStarting || !isRecording}
                     >
                       Stop
                     </Button>
-                    <Button size="sm" onClick={handleVoiceSubmit} className="min-w-20">
+                    <Button size="sm" onClick={handleVoiceSubmit} className="min-w-20" disabled={isStarting}>
                       Submit
                     </Button>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+                {!isRecording && !hasRecording && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      discardRecording()
+                      setMode("collapsed")
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         )}
