@@ -60,21 +60,37 @@ export default function HomePage() {
     () => [
       "Queued runner",
       "Allocating resources",
+      "Provisioning build VM",
       "Checking out repo",
+      "Restoring cache",
+      "Verifying lockfile",
       "Installing dependencies",
-      "Running lint checks",
+      "Auditing packages",
+      "Preparing workspace",
+      "Linting sources",
+      "Type checking",
       "Compiling",
-      "Running unit steps",
+      "Generating assets",
+      "Running unit tests",
+      "Running integration tests",
+      "Collecting coverage",
+      "Optimizing output",
+      "Packaging artifacts",
       "Uploading artifacts",
+      "Publishing preview",
+      "Warming CDN cache",
+      "Verifying deployment",
+      "Running post-run hooks",
+      "Cleaning up",
+      "Finalizing",
       "Almost done",
     ],
     [],
   )
 
-  const simulateProcessing = async (): Promise<Theme> => {
-    // Simulate workflow with 3.5-5s delay
-    const delay = 3500 + Math.floor(Math.random() * 1500)
-    await new Promise((resolve) => setTimeout(resolve, delay))
+  const simulateProcessing = async (totalMs: number): Promise<Theme> => {
+    // Simulate workflow with a realistic duration between 1 and 3 minutes
+    await new Promise((resolve) => setTimeout(resolve, totalMs))
     // Pick a random theme result
     return themes[Math.floor(Math.random() * themes.length)]
   }
@@ -86,47 +102,73 @@ export default function HomePage() {
     console.log("[v0] Theme applied:", t)
   }
 
-  // Mock a simple status update stream (SSE placeholder)
-  const startStatusStream = (id: string) => {
-    // Between 1 and 3 updates within ~5s
-    const count = 1 + Math.floor(Math.random() * 3)
-    const timeouts: number[] = []
+  // Mock a status update stream over the entire workflow duration
+  const startStatusStream = (id: string, totalMs: number) => {
+    const startedAt = Date.now()
+    const timers: number[] = []
 
-    for (let i = 0; i < count; i++) {
-      const when = 500 + Math.floor(Math.random() * 4200) // 0.5s..4.7s
-      const to = window.setTimeout(() => {
-        const message = statusPool[Math.floor(Math.random() * statusPool.length)]
-        setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, statusMessage: message } : j)))
-      }, when)
-      timeouts.push(to)
+    const scheduleNext = () => {
+      const elapsed = Date.now() - startedAt
+      if (elapsed >= totalMs) return
+
+      const progress = Math.min(99, Math.floor((elapsed / totalMs) * 100))
+      // Pick a message roughly aligned to progress so the sequence feels natural
+      const idx = Math.min(
+        statusPool.length - 1,
+        Math.floor((elapsed / totalMs) * statusPool.length),
+      )
+      const base = statusPool[idx]
+
+      const minutes = Math.floor(elapsed / 60000)
+      const seconds = Math.floor((elapsed % 60000) / 1000)
+      const tPlus = `T+${minutes}m ${seconds.toString().padStart(2, "0")}s`
+
+      const message = `${base} • ${progress}% • ${tPlus}`
+      setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, statusMessage: message } : j)))
+
+      // Schedule next update between 2–6 seconds to feel lively but not noisy
+      const delay = 2000 + Math.floor(Math.random() * 4000)
+      const to = window.setTimeout(scheduleNext, delay)
+      timers.push(to)
     }
 
-    timeoutsRef.current[id] = timeouts
+    // Kick off first update quickly
+    const first = window.setTimeout(scheduleNext, 800)
+    timers.push(first)
+
+    timeoutsRef.current[id] = timers
   }
 
   const clearStatusStream = (id: string) => {
-    const timeouts = timeoutsRef.current[id]
-    if (timeouts) {
-      timeouts.forEach((t) => window.clearTimeout(t))
+    const timers = timeoutsRef.current[id]
+    if (timers) {
+      timers.forEach((t) => {
+        window.clearTimeout(t)
+        // Clear as interval too in case an interval id is ever added
+        window.clearInterval(t)
+      })
       delete timeoutsRef.current[id]
     }
   }
 
   const handleSubmit = async (input: string, isVoice: boolean) => {
     const id = createId()
+    // Random total duration between 1–3 minutes (inclusive of 1 minute, exclusive of 3+)
+    const totalMs = 60_000 + Math.floor(Math.random() * 120_000) // 60s..180s
+
     // Add a processing job with initial message
     setJobs((prev) => [
       ...prev,
       { id, input, isVoice, status: "processing", statusMessage: "Starting workflow" },
     ])
 
-    // Kick off status update stream
-    startStatusStream(id)
+    // Kick off status update stream for the whole duration
+    startStatusStream(id, totalMs)
 
-    console.log("[v0] Processing input:", { id, input, isVoice })
+    console.log("[v0] Processing input:", { id, input, isVoice, totalMs })
 
     try {
-      const theme = await simulateProcessing()
+      const theme = await simulateProcessing(totalMs)
       clearStatusStream(id)
       // Mark job ready with its theme result
       setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, status: "ready", theme } : j)))
