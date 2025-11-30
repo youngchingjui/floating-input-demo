@@ -18,24 +18,29 @@ export function StatusTicker({ message, duration = 250 }: StatusTickerProps) {
   useEffect(() => {
     if (message === current) return
 
-    // Prepare incoming message and start animation on next frame
-    setIncoming(message)
-    setAnimating(false)
-
-    const raf = requestAnimationFrame(() => {
-      setAnimating(true)
-    })
-
-    // After the animation completes, commit the new current message
-    if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
-    timeoutRef.current = window.setTimeout(() => {
-      setCurrent(message)
-      setIncoming(null)
+    let raf: number | null = null
+    // Schedule asynchronously to avoid synchronous setState in the effect body
+    const pre = window.setTimeout(() => {
+      // Prepare incoming message and start animation on next frame
+      setIncoming(message)
       setAnimating(false)
-    }, duration)
+
+      raf = requestAnimationFrame(() => {
+        setAnimating(true)
+      })
+
+      // After the animation completes, commit the new current message
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
+      timeoutRef.current = window.setTimeout(() => {
+        setCurrent(message)
+        setIncoming(null)
+        setAnimating(false)
+      }, duration)
+    }, 0)
 
     return () => {
-      cancelAnimationFrame(raf)
+      if (raf) cancelAnimationFrame(raf)
+      window.clearTimeout(pre)
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current)
         timeoutRef.current = null

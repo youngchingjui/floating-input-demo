@@ -34,13 +34,6 @@ export default function InputPill({ onSubmit, jobs = [], onRevealJob, onSeeAllPr
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const splitRef = useRef<HTMLDivElement | null>(null)
 
-  // Reset recording time when there is no active or saved recording
-  useEffect(() => {
-    if (!isRecording && !hasRecording) {
-      setRecordingTime(0)
-    }
-  }, [isRecording, hasRecording])
-
   // Close dropdown on outside click or on escape
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
